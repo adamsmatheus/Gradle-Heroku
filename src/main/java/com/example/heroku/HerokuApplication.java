@@ -41,9 +41,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-@Controller
+
 @SpringBootApplication
-@RequestMapping("/")
 public class HerokuApplication {
 
   @Value("${spring.datasource.url}")
@@ -52,21 +51,54 @@ public class HerokuApplication {
   @Autowired
   private DataSource dataSource;
 
-  @Autowired
-  private PokeService pokeService;
+
 
   public static void main(String[] args) throws Exception {
     SpringApplication.run(HerokuApplication.class, args);
   }
 
+
+
   @Bean
   public RestTemplate restTemplate(RestTemplateBuilder builder) {
     return builder.build();
   }
+  @RequestMapping("/")
+  String index() {
+    return "index";
+  }
 
-  @GetMapping("/pokemons")
-  public List<Pokemon> getPokemonWithSubstring(@RequestParam("q") String substring) {
-    return pokeService.searchWithSubstring(substring);
+
+  @RequestMapping("/db")
+  String db(Map<String, Object> model) {
+    try (Connection connection = dataSource.getConnection()) {
+      Statement stmt = connection.createStatement();
+      stmt.executeUpdate("CREATE TABLE IF NOT EXISTS ticks (tick timestamp)");
+      stmt.executeUpdate("INSERT INTO ticks VALUES (now())");
+      ResultSet rs = stmt.executeQuery("SELECT tick FROM ticks");
+
+      ArrayList<String> output = new ArrayList<String>();
+      while (rs.next()) {
+        output.add("Read from DB: " + rs.getTimestamp("tick"));
+      }
+
+      model.put("records", output);
+      return "db";
+    } catch (Exception e) {
+      model.put("message", e.getMessage());
+      return "error";
+    }
+  }
+
+  @Bean
+  public DataSource dataSource() throws SQLException {
+    if (dbUrl == null || dbUrl.isEmpty()) {
+      return new HikariDataSource();
+    } else {
+      HikariConfig config = new HikariConfig();
+      config.setJdbcUrl(dbUrl);
+      return new HikariDataSource(config);
+    }
   }
 
 }
